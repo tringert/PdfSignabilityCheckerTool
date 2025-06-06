@@ -34,7 +34,10 @@ Returns exit codes:
 
 ## Development
 
-- To publish in the indicated Native AOT format, the C++ Desktop Development Tools must be installed in Visual Studio.
+- To publish to a single file executable, without containing the .Net Runtime, use the following command:
+  ```powershell
+  dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false
+  ```
 
 ## License
 

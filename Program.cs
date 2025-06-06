@@ -24,7 +24,7 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error: {ex.Message}");
+                Console.Error.WriteLine($"Error: {ex}");
                 Console.WriteLine("false");
                 return 99;
             }

@@ -5,9 +5,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
-    <IsAotCompatible>true</IsAotCompatible>
     <Platforms>x64</Platforms>
+    <Version>$(Version)</Version>
   </PropertyGroup>
 
   <ItemGroup>
