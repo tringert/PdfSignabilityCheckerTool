@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36127.28
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfSignabilityCheckerTool", "PdfSignabilityCheckerTool.csproj", "{62961676-3FF3-4D50-B832-E07A4804DEF3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Debug|Any CPU.Build.0 = Debug|x64
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Debug|x64.ActiveCfg = Debug|x64
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Debug|x64.Build.0 = Debug|x64
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Release|x64.ActiveCfg = Release|x64
+		{62961676-3FF3-4D50-B832-E07A4804DEF3}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B8AD7F4A-13AD-4928-99BB-96C8C1CEE0BF}
+	EndGlobalSection
+EndGlobal
