@@ -15,7 +15,11 @@ internal static class PdfSignabilityChecker
             return true;
 
         if (!CanCreateSignatureFieldDespiteEncryption(readerWithPermissions))
+        {
+            Console.Error.WriteLine("Modification of the content and/or creation of interactive fields, including signature fields, is disabled in the PDF." +
+                "Modification of the content and/or creation of interactive fields, including signature fields, is disabled in the PDF.");
             return false;
+        }
 
         return true;
     }
