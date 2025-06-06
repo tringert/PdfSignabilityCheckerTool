@@ -1,0 +1,40 @@
+name: Publish Binary
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger only on version tags like v1.2.3
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+
+    steps:
+      - name: 📥 Checkout source
+        uses: actions/checkout@v4
+
+      - name: 🧰 Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.300'
+
+      - name: 🏗️ Restore dependencies
+        run: dotnet restore
+
+      - name: 🛠️ Build
+        run: dotnet build -c Release --no-restore
+
+      - name: 📦 Publish (single-file, framework-dependent)
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version -o ./publish
+
+      - name: 📤 Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          files: ./publish/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
