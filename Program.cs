@@ -34,6 +34,6 @@ internal static class Program
             ? "true"
             : "false");
 
-        return isSignable ? 0 : 3;
+        return isSignable ? 0 : 1;
     }
 }

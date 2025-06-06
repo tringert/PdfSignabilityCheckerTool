@@ -15,9 +15,7 @@ internal static class PdfSignabilityChecker
             return true;
 
         if (!CanCreateSignatureFieldDespiteEncryption(readerWithPermissions))
-        {
-            throw new InvalidOperationException("A PDF-ben le van tiltva a tartalom módosítása és/vagy az interaktív mezők létrehozása, az aláírásmező létrehozását is beleértve.");
-        }
+            return false;
 
         return true;
     }
