@@ -32,7 +32,8 @@ jobs:
       - name: 📦 Publish (single-file, framework-dependent)
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
-          dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version -o ./publish
+          $project = Get-ChildItem -Path . -Filter *.csproj -Recurse | Select-Object -First 1
+          dotnet publish $project.FullName -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version
 
       - name: 📤 Upload release assets
         uses: softprops/action-gh-release@v2
