@@ -33,12 +33,13 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
           $project = Get-ChildItem -Path . -Filter *.csproj -Recurse | Select-Object -First 1
-          dotnet publish $project.FullName -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version
-
-      - name: 📤 Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Release ${{ github.ref_name }}
-          files: ./publish/*.exe
+          dotnet publish $project.FullName -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version -o ./output
+      - name: 📤 Upload binary to GitHub Release
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./output/PdfSignabilityCheckerTool.exe
+          asset_name: PdfSignabilityCheckerTool.exe
+          asset_content_type: application/octet-stream
