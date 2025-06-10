@@ -15,18 +15,18 @@ jobs:
       DOTNET_NOLOGO: true
 
     steps:
-      - name: 📥 Checkout source
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: 🧰 Setup .NET
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.300'
 
-      - name: 🏗️ Restore dependencies
+      - name: Restore dependencies
         run: dotnet restore
 
-      - name: 🛠️ Build
+      - name: Build
         run: dotnet build -c Release --no-restore
 
       - name: 📦 Publish (single-file, framework-dependent)
@@ -34,7 +34,19 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart("v")
           $project = Get-ChildItem -Path . -Filter *.csproj -Recurse | Select-Object -First 1
           dotnet publish $project.FullName -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version -o ./output
-      - name: 📤 Upload binary to GitHub Release
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload binary to Assets
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
