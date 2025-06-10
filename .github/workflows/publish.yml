@@ -3,7 +3,10 @@ name: Publish Binary
 on:
   push:
     tags:
-      - 'v*' # Trigger only on version tags like v1.2.3
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build:
