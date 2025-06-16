@@ -25,12 +25,12 @@ internal static class Program
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Error: {ex}");
-                Console.WriteLine("false");
+                Console.Write("false");
                 return 99;
             }
         }
 
-        Console.WriteLine(isSignable
+        Console.Write(isSignable
             ? "true"
             : "false");
 
