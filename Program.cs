@@ -1,4 +1,6 @@
-﻿namespace PdfSignabilityCheckerTool;
+﻿using iText.Kernel.Exceptions;
+
+namespace PdfSignabilityCheckerTool;
 
 internal static class Program
 {
@@ -21,6 +23,12 @@ internal static class Program
             try
             {
                 isSignable = PdfSignabilityChecker.IsSignable(ms);
+            }
+            catch (BadPasswordException)
+            {
+                Console.Error.WriteLine("This PDF is password-protected and therefore cannot be signed.");
+                Console.Write("false");
+                return 2;
             }
             catch (Exception ex)
             {

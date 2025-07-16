@@ -23,7 +23,9 @@ Get-Content -Path "C:\\Temp\\doc.pdf" -AsByteStream -Raw | .\PdfSignabilityCheck
 The application will output the result to the standard output (with text 'true' or 'false'), indicating whether the PDF is signable or not.
 
 Returns exit codes:
+
 - `0`: the PDF is signable,
+- `2`: the PDF is not signable, because it is password protected
 - `1`: the PDF is not signable, because modification of the content and/or creation of interactive fields, including signature fields, is disabled in the PDF.
 - `99`: the PDF is not signable, an error occurred while processing the PDF.
 
@@ -35,6 +37,7 @@ Returns exit codes:
 ## Development
 
 - To publish to a single file executable, without containing the .Net Runtime, use the following command:
+
   ```powershell
   dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false
   ```
