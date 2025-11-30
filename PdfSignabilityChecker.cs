@@ -14,7 +14,8 @@ internal static class PdfSignabilityChecker
         uint perms = unchecked((uint)reader.GetPermissions());
 
         bool modifyContentsAllowed = (perms & Constants.PermissionFlags.AllowModifyContents) != 0;
+        bool modifyAnnotationsAllowed = (perms & Constants.PermissionFlags.AllowModifyAnnotations) != 0;
 
-        return modifyContentsAllowed;
+        return modifyContentsAllowed && modifyAnnotationsAllowed;
     }
 }
