@@ -1,6 +1,6 @@
 # PdfSignabilityCheckerTool
 
-A .NET 9 library for checking if a PDF file is signable, with support for encrypted PDFs and permission checks. Built using C# 13 and iText 7.
+A .NET 9 console application for checking if a PDF file is signable, with support for encrypted PDFs and permission checks. Built using C# 13 and iText.
 The purpose of this tool is to determine if a given PDF can be digitally signed with DSS (Digital Signature Service). It uses the same checking functionality as DSS to assess signability.
 However, it does not support encrypted files when certain modifications are restricted, even if you possess the encryption key.
 
@@ -17,7 +17,7 @@ However, it does not support encrypted files when certain modifications are rest
 To use the PdfSignabilityCheckerTool in Powershell, pipe the PDF file to the standard input:
 
 ```powershell
-Get-Content -Path "C:\\Temp\\doc.pdf" -AsByteStream -Raw | .\PdfSignabilityCheckerTool.exe
+Get-Content -Path "C:\Temp\doc.pdf" -AsByteStream -Raw | .\PdfSignabilityCheckerTool.exe
 ```
 
 The application will output the result to the standard output (with text 'true' or 'false'), indicating whether the PDF is signable or not.
@@ -32,7 +32,6 @@ Returns exit codes:
 ## Requirements
 
 - .NET 9
-- iText 7 (iText.Kernel.Pdf)
 
 ## Development
 

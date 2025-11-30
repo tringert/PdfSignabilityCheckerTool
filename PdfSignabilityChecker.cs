@@ -4,38 +4,17 @@ namespace PdfSignabilityCheckerTool;
 
 internal static class PdfSignabilityChecker
 {
-    internal static bool IsSignable(MemoryStream ms)
+    internal static bool IsSignable(PdfReader reader, bool treatUnencryptedAsSignable)
     {
-        using PdfReader reader = new(ms);
         using PdfDocument pdfDoc = new(reader);
-        PdfReader readerWithPermissions = pdfDoc.GetReader();
-        bool isEncrypted = readerWithPermissions.IsEncrypted();
 
-        if (!isEncrypted)
+        if (!reader.IsEncrypted() && treatUnencryptedAsSignable)
             return true;
 
-        if (!CanCreateSignatureFieldDespiteEncryption(readerWithPermissions))
-        {
-            Console.Error.WriteLine("Modification of the content and/or creation of interactive fields, including signature fields, is disabled in the PDF." +
-                "Modification of the content and/or creation of interactive fields, including signature fields, is disabled in the PDF.");
-            return false;
-        }
+        uint perms = unchecked((uint)reader.GetPermissions());
 
-        return true;
-    }
+        bool modifyContentsAllowed = (perms & Constants.PermissionFlags.AllowModifyContents) != 0;
 
-    private static bool CanCreateSignatureFieldDespiteEncryption(PdfReader readerWithPermissions)
-    {
-        int rawPermissions = readerWithPermissions.GetPermissions();
-        uint permissions = unchecked((uint)rawPermissions);
-        bool isContentModificationsAllowed = HasPermission(permissions, EncryptionConstants.ALLOW_MODIFY_CONTENTS);
-        bool isAnnotationModificationsAllowed = HasPermission(permissions, EncryptionConstants.ALLOW_MODIFY_ANNOTATIONS);
-
-        return isContentModificationsAllowed && isAnnotationModificationsAllowed;
-    }
-
-    private static bool HasPermission(uint permissions, int permissionFlag)
-    {
-        return (permissions & permissionFlag) != 0;
+        return modifyContentsAllowed;
     }
 }
