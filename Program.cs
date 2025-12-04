@@ -34,19 +34,29 @@ internal static class Program
 
         using var ms = new MemoryStream();
         stdin.CopyTo(ms);
-        ms.Position = 0;
 
-        using PdfReader reader = new(ms);
+        // For debugging purposes only
+        if (false)
+        {
+
+            ms.Position = 0;
+            using PdfReader reader = new(ms);
+            PermissionRetriever.PrintPermissions(reader);
+            return 0;
+        }
 
         try
         {
             if (args.Contains(Constants.EncryptionInfoParameterName))
             {
+                ms.Position = 0;
+                using PdfReader reader = new(ms);
                 EncryptionInfoRetriever.PrintInfo(reader);
                 return 0;
             }
 
-            isSignable = PdfSignabilityChecker.IsSignable(reader, treatUnencryptedAsSignable);
+            PdfSignabilityChecker pdfSignabilityChecker = new(ms);
+            isSignable = pdfSignabilityChecker.IsSignable(treatUnencryptedAsSignable);
         }
         catch (BadPasswordException)
         {

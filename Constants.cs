@@ -17,16 +17,4 @@ Parameters:
 {TreatUnencryptedAsSignable}     Treat unencrypted PDFs as signable.
 {EncryptionInfoParameterName}                     Display the encryption dictionary.
 ";
-
-    internal static class PermissionFlags
-    {
-        internal const int AllowPrinting = 1 << 2;
-        internal const int AllowModifyContents = 1 << 3;
-        internal const int AllowCopy = 1 << 4;
-        internal const int AllowModifyAnnotations = 1 << 5;
-        internal const int AllowFillIn = 1 << 8;
-        internal const int AllowScreenReaders = 1 << 9;
-        internal const int AllowAssembly = 1 << 10;
-        internal const int AllowDegradedPrinting = 1 << 11;
-    }
 }
