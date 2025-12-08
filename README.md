@@ -70,7 +70,7 @@ dotnet build -c Release
 - To publish to a single file executable, without containing the .Net Runtime, use the following command:
 
 ```powershell
-dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
 ```
 
 ## License
