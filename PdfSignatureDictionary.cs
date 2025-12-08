@@ -1,6 +1,5 @@
 ﻿using iText.Kernel.Pdf;
 using PdfSignabilityCheckerTool.Enums;
-using static PdfSignabilityCheckerTool.PdfSignabilityChecker;
 
 namespace PdfSignabilityCheckerTool;
 
@@ -10,10 +9,7 @@ internal class SigFieldPermissions
     public List<string>? Fields { get; set; }
     public CertificationPermission? CertificationPermission { get; set; }
 
-    public SigFieldPermissions()
-    {
-
-    }
+    public SigFieldPermissions() { }
 
     public SigFieldPermissions(PdfName actionName, PdfArray fieldsArray)
     {
