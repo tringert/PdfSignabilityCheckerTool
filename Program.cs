@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using iText.Kernel.Exceptions;
-using iText.Kernel.Pdf;
 
 namespace PdfSignabilityCheckerTool;
 
@@ -34,30 +33,28 @@ internal static class Program
 
         using var ms = new MemoryStream();
         stdin.CopyTo(ms);
-        ms.Position = 0;
-
-        using PdfReader reader = new(ms);
 
         try
         {
-            if (args.Contains(Constants.EncryptionInfoParameterName))
-            {
-                EncryptionInfoRetriever.PrintInfo(reader);
-                return 0;
-            }
-
-            isSignable = PdfSignabilityChecker.IsSignable(reader, treatUnencryptedAsSignable);
+            PdfSignabilityChecker pdfSignabilityChecker = new(ms, GetSigFieldName(args));
+            isSignable = pdfSignabilityChecker.IsSignable(treatUnencryptedAsSignable);
         }
         catch (BadPasswordException)
         {
             Console.Error.WriteLine(Constants.PasswordProtectedErrorMessage);
-            Console.Write("false");
+            WriteFalse();
             return 2;
+        }
+        catch (PdfException ex) when (ex.Message.Contains("Certificate is not provided"))
+        {
+            Console.Error.WriteLine(Constants.CertificateProtectedErrorMessage);
+            WriteFalse();
+            return 66;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Error: {ex}");
-            Console.Write("false");
+            WriteFalse();
             return 99;
         }
 
@@ -68,5 +65,23 @@ internal static class Program
             : "false");
 
         return isSignable ? 0 : 1;
+    }
+
+    private static string GetSigFieldName(string[] args)
+    {
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("-sigfieldname", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                return args[i + 1];
+            }
+        }
+
+        return "";
+    }
+
+    private static void WriteFalse()
+    {
+        Console.Write("false");
     }
 }
