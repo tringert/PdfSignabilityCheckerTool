@@ -5,6 +5,7 @@ internal static class Constants
     internal const string TreatUnencryptedAsSignable = "--unencrypted-is-signable";
     internal const string EncryptionInfoParameterName = "--encinfo";
     internal const string PasswordProtectedErrorMessage = "This PDF is password-protected and therefore cannot be opened.";
+    internal const string CertificateProtectedErrorMessage = "The PDF is encrypted with a certificate and cannot be opened without the private key.";
     internal const string NoInputErrorMessage = $@"
 No input was redirected into the program.
 

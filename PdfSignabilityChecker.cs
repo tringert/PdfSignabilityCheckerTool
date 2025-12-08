@@ -1,21 +1,18 @@
 ﻿using iText.Kernel.Pdf;
+using PdfSignabilityCheckerTool.Enums;
 
 namespace PdfSignabilityCheckerTool;
 
 internal class PdfSignabilityChecker
 {
-    private PdfReaderWrapper _pdfReaderWrapper;
+    private readonly PdfReaderWrapper _pdfReaderWrapper;
+    private readonly string _signatureFieldId;
 
-    public PdfSignabilityChecker(MemoryStream ms)
+    public PdfSignabilityChecker(MemoryStream ms, string signatureFieldId)
     {
         ms.Position = 0;
         _pdfReaderWrapper = new(ms);
-    }
-
-    private PdfDocument GetPdfDocument()
-    {
-        PdfReader reader = _pdfReaderWrapper.GetPdfReader();
-        return new PdfDocument(reader);
+        _signatureFieldId = signatureFieldId ?? "";
     }
 
     internal bool IsSignable(bool treatUnencryptedAsSignable)
@@ -25,31 +22,15 @@ internal class PdfSignabilityChecker
         if (treatOpenedWithFullPermissionAsSignable)
             return true;
 
-        (bool isSignable, string reason) result = NewWay();
+        (bool isSignable, string reason) = NewWay();
 
-        PdfDictionary encryptDict = _pdfReaderWrapper.Trailer.GetAsDictionary(PdfName.Encrypt);
-
-        if (encryptDict != null)
+        if (!isSignable)
         {
-            // encryption dictionary exists but is invalid or empty
-            PdfNumber p = encryptDict.GetAsNumber(PdfName.P);
-            if (p != null)
-            {
-                int permissionBits = p.IntValue();
-
-                bool modifyAllowed = (permissionBits & -4) != 0; // example bit test
-                                                                 // … you can manually decode /P here
-
-                return modifyAllowed;
-            }
+            Console.Error.WriteLine(reason);
+            return false;
         }
 
-        uint perms = unchecked((uint)_pdfReaderWrapper.Permissions);
-
-        bool modifyContentsAllowed = (perms & EncryptionConstants.ALLOW_MODIFY_CONTENTS) != 0;
-        bool modifyAnnotationsAllowed = (perms & EncryptionConstants.ALLOW_MODIFY_ANNOTATIONS) != 0;
-
-        return modifyContentsAllowed && modifyAnnotationsAllowed;
+        return true;
     }
 
     private (bool, string) NewWay()
@@ -101,17 +82,14 @@ internal class PdfSignabilityChecker
 
         try
         {
-            // Honnan tudjuk, hogy milyen Id-t használ a KEASZ?
-            string signatureFieldId = "";//fieldParameters.getFieldId();
-
-            Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> sigDictionaries = SignatureExtractor.ExtractSigDictionaries(GetPdfDocument());
+            Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> sigDictionaries = SignatureExtractor.ExtractSigDictionaries(_pdfReaderWrapper);
 
             // FieldMDP
             foreach (PdfSignatureDictionary signatureDictionary in sigDictionaries.Keys)
             {
                 SigFieldPermissions? fieldMDP = signatureDictionary.GetFieldMDP();
 
-                if (fieldMDP != null && IsSignatureFieldCreationForbidden(fieldMDP, signatureFieldId))
+                if (fieldMDP != null && IsSignatureFieldCreationForbidden(fieldMDP, _signatureFieldId))
                 {
                     return (false, "FieldMDP dictionary does not permit a new signature creation!");
                 }
@@ -125,13 +103,12 @@ internal class PdfSignabilityChecker
                     SigFieldPermissions? lockDict = signatureField.GetLockDictionary();
 
                     if (lockDict != null && lockDict.CertificationPermission != null &&
-                        IsSignatureFieldCreationForbidden(lockDict, signatureFieldId))
+                        IsSignatureFieldCreationForbidden(lockDict, _signatureFieldId))
                     {
                         return (false, "Lock dictionary does not permit a new signature creation!");
                     }
                 }
             }
-
         }
         catch (IOException e)
         {
@@ -195,61 +172,40 @@ internal class PdfSignabilityChecker
 
         if (certificationLevel > 0)
         {
-            return GetCertificationPermissionByNumber(certificationLevel);
+            return Helpers.GetCertificationPermissionByNumber(certificationLevel);
         }
 
         return null;
     }
 
-    public static CertificationPermission? GetCertificationPermissionByNumber(int certificationLevel)
-    {
-        return certificationLevel switch
-        {
-            1 => CertificationPermission.NO_CHANGE_PERMITTED,
-            2 => CertificationPermission.MINIMAL_CHANGES_PERMITTED,
-            3 => CertificationPermission.CHANGES_PERMITTED,
-            _ => throw new InvalidDataException($"Not supported /DocMDP code value : {certificationLevel}"),
-        };
-    }
-
     public int GetCertificationLevel()
     {
-        PdfDictionary dic = _pdfReaderWrapper.RootCatalog.GetAsDictionary(PdfName.Perms);
-
-        if (dic is null)
+        if (_pdfReaderWrapper.PermsDictionary is null)
         {
             return (int)PdfSignatureAppearance.NOT_CERTIFIED;
         }
 
-        dic = dic.GetAsDictionary(PdfName.DocMDP);
-
-        if (dic is null)
+        if (_pdfReaderWrapper.DocMdpDictionary is null)
         {
             return (int)PdfSignatureAppearance.NOT_CERTIFIED;
         }
 
-        PdfArray arr = dic.GetAsArray(PdfName.Reference);
-
-        if (arr is null || arr.Size() == 0)
+        if (_pdfReaderWrapper.ReferenceArray is null || _pdfReaderWrapper.ReferenceArray.Size() == 0)
         {
             return (int)PdfSignatureAppearance.NOT_CERTIFIED;
         }
 
-        dic = arr.GetAsDictionary(0);
-
-        if (dic is null)
+        if (_pdfReaderWrapper.ReferenceDictionary is null)
         {
             return (int)PdfSignatureAppearance.NOT_CERTIFIED;
         }
 
-        dic = dic.GetAsDictionary(PdfName.TransformParams);
-
-        if (dic is null)
+        if (_pdfReaderWrapper.TransformParamsDictionary is null)
         {
             return (int)PdfSignatureAppearance.NOT_CERTIFIED;
         }
 
-        PdfNumber p = dic.GetAsNumber(PdfName.P);
+        PdfNumber? p = _pdfReaderWrapper.P;
 
         if (p is null)
         {
@@ -257,22 +213,6 @@ internal class PdfSignabilityChecker
         }
 
         return p.IntValue();
-    }
-
-    public enum CertificationPermission
-    {
-        NO_CHANGE_PERMITTED = 1,
-        MINIMAL_CHANGES_PERMITTED = 2,
-        CHANGES_PERMITTED = 3
-    }
-
-    public enum PdfSignatureAppearance
-    {
-        NOT_CERTIFIED = -1,
-        CERTIFIED_ALL_CHANGES_ALLOWED = 0,
-        CERTIFIED_NO_CHANGES_ALLOWED = 1,
-        CERTIFIED_FORM_FILLING = 2,
-        CERTIFIED_FORM_FILLING_AND_ANNOTATIONS = 3
     }
 
     private bool CanFillSignatureForm()

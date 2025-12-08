@@ -4,7 +4,7 @@ namespace PdfSignabilityCheckerTool;
 
 internal class PdfReaderWrapper
 {
-    private MemoryStream _ms;
+    private readonly MemoryStream _ms;
 
     internal bool IsOpenedWithFullPermission { get; init; }
 
@@ -12,9 +12,19 @@ internal class PdfReaderWrapper
 
     internal bool IsEncrypted { get; init; }
 
-    internal PdfDictionary Trailer { get; init; }
+    internal PdfDictionary? Trailer { get; init; }
 
-    internal PdfDictionary RootCatalog => Trailer.GetAsDictionary(PdfName.Root);
+    internal PdfDictionary? PermsDictionary { get; set; }
+
+    internal PdfDictionary? DocMdpDictionary { get; set; }
+
+    internal PdfArray? ReferenceArray { get; set; }
+
+    internal PdfDictionary? ReferenceDictionary { get; set; }
+
+    internal PdfDictionary? TransformParamsDictionary { get; set; }
+
+    internal PdfNumber? P { get; set; }
 
     public PdfReaderWrapper(MemoryStream ms)
     {
@@ -26,6 +36,15 @@ internal class PdfReaderWrapper
         Permissions = reader.GetPermissions();
         IsEncrypted = reader.IsEncrypted();
         Trailer = pdf.GetTrailer();
+
+        PdfDictionary? rootCatalog = Trailer.GetAsDictionary(PdfName.Root);
+
+        PermsDictionary = rootCatalog?.GetAsDictionary(PdfName.Perms);
+        DocMdpDictionary = PermsDictionary?.GetAsDictionary(PdfName.DocMDP);
+        ReferenceArray = DocMdpDictionary?.GetAsArray(PdfName.Reference);
+        ReferenceDictionary = ReferenceArray?.GetAsDictionary(0);
+        TransformParamsDictionary = ReferenceDictionary?.GetAsDictionary(PdfName.TransformParams);
+        P = TransformParamsDictionary?.GetAsNumber(PdfName.P);
     }
 
     internal PdfReader GetPdfReader()
