@@ -71,7 +71,7 @@ internal static class SignatureExtractor
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Unable to create a PdfSignatureDictionary for field with name '{name}': {e.Message}");
+                Console.Error.WriteLine($"Unable to create a PdfSignatureDictionary for field with name '{name}': {e.Message}");
                 return;
             }
 
@@ -82,7 +82,7 @@ internal static class SignatureExtractor
         {
             List<PdfSignatureField> fieldList = _signaturesDictionary[signature];
             fieldList.Add(pdfSignatureField);
-            Console.WriteLine($"More than one field refers to the same signature dictionary: {fieldList}!");
+            Console.Error.WriteLine($"More than one field refers to the same signature dictionary: {fieldList}!");
         }
     }
 }
