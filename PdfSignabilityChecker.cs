@@ -22,7 +22,7 @@ internal class PdfSignabilityChecker
         if (treatOpenedWithFullPermissionAsSignable)
             return true;
 
-        (bool isSignable, string reason) = NewWay();
+        (bool isSignable, string reason) = CheckDocumentProperties();
 
         if (!isSignable)
         {
@@ -33,7 +33,7 @@ internal class PdfSignabilityChecker
         return true;
     }
 
-    private (bool, string) NewWay()
+    private (bool, string) CheckDocumentProperties()
     {
         (bool isDocPermissionsOk, string reason) = CheckDocumentPermissions();
 
