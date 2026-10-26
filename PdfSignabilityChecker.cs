@@ -1,4 +1,6 @@
-﻿using iText.Kernel.Pdf;
+﻿using iText.Forms;
+using iText.Forms.Fields;
+using iText.Kernel.Pdf;
 using PdfSignabilityCheckerTool.Enums;
 
 namespace PdfSignabilityCheckerTool;
@@ -11,13 +13,17 @@ internal class PdfSignabilityChecker
     public PdfSignabilityChecker(MemoryStream ms, string signatureFieldId)
     {
         ms.Position = 0;
-        _pdfReaderWrapper = new(ms);
+
+        _pdfReaderWrapper = new PdfReaderWrapper(ms);
         _signatureFieldId = signatureFieldId ?? "";
     }
 
     internal bool IsSignable(bool treatUnencryptedAsSignable)
     {
-        bool treatOpenedWithFullPermissionAsSignable = (!_pdfReaderWrapper.IsEncrypted || _pdfReaderWrapper.IsOpenedWithFullPermission) && treatUnencryptedAsSignable;
+        // Preserve the original explicit override behavior.
+        bool treatOpenedWithFullPermissionAsSignable =
+            (!_pdfReaderWrapper.IsEncrypted || _pdfReaderWrapper.IsOpenedWithFullPermission)
+            && treatUnencryptedAsSignable;
 
         if (treatOpenedWithFullPermissionAsSignable)
             return true;
@@ -35,84 +41,105 @@ internal class PdfSignabilityChecker
 
     private (bool, string) CheckDocumentProperties()
     {
-        (bool isDocPermissionsOk, string reason) = CheckDocumentPermissions();
+        using PdfDocument pdf = _pdfReaderWrapper.OpenDocument();
+
+        (bool isDocPermissionsOk, string reason) = CheckDocumentPermissions(pdf);
 
         if (!isDocPermissionsOk)
-        {
             return (false, reason);
-        }
 
-        (bool isDictPermissionsOk, string dictReason) = CheckSignatureRestrictionDictionaries();
+        (bool isDictPermissionsOk, string dictReason) = CheckSignatureRestrictionDictionaries(pdf);
 
         if (!isDictPermissionsOk)
-        {
             return (false, dictReason);
-        }
 
         return (true, "");
     }
 
-    private (bool, string) CheckDocumentPermissions()
+    private (bool, string) CheckDocumentPermissions(PdfDocument pdf)
     {
-        bool canFillSignatureForms = CanFillSignatureForm();
-
-        if (!canFillSignatureForms)
+        if (!CanFillSignatureForm())
         {
-            return (false, "PDF Permissions dictionary does not allow fill in interactive form fields, including existing signature fields when document is open with user-access!");
+            return (false, "PDF permissions do not allow filling or signing form fields.");
         }
 
-        bool canCreateSignatureField = CanCreateSignatureField();
-
-        if (!canCreateSignatureField)
+        // Creating a new signature field requires different permissions
+        // from signing an existing unsigned signature field.
+        if (!IsExistingUnsignedSignatureField(pdf) && !CanCreateSignatureField())
         {
-            return (false, "PDF Permissions dictionary does not allow modification or creation interactive form fields, including signature fields when document is open with user-access!");
+            return (false, "PDF permissions do not allow creating a new signature field.");
         }
 
         return (true, "");
     }
 
-    private (bool, string) CheckSignatureRestrictionDictionaries()
+    private bool IsExistingUnsignedSignatureField(PdfDocument pdf)
+    {
+        if (string.IsNullOrWhiteSpace(_signatureFieldId))
+            return false;
+
+        PdfAcroForm? acroForm = PdfAcroForm.GetAcroForm(pdf, false);
+
+        if (acroForm is null)
+            return false;
+
+        IDictionary<string, PdfFormField> fields = acroForm.GetAllFormFields();
+
+        if (!fields.TryGetValue(_signatureFieldId, out PdfFormField? field))
+            return false;
+
+        PdfDictionary fieldDictionary = field.GetPdfObject();
+
+        // /FT can be inherited from a parent field.
+        PdfName? fieldType = fieldDictionary.GetAsName(PdfName.FT);
+        PdfDictionary? parent = fieldDictionary.GetAsDictionary(PdfName.Parent);
+
+        while (fieldType is null && parent is not null)
+        {
+            fieldType = parent.GetAsName(PdfName.FT);
+            parent = parent.GetAsDictionary(PdfName.Parent);
+        }
+
+        if (!PdfName.Sig.Equals(fieldType))
+            return false;
+
+        // An existing signature value means the field is already signed.
+        PdfObject? value = fieldDictionary.Get(PdfName.V);
+
+        return value is null || value.IsNull();
+    }
+
+    private (bool, string) CheckSignatureRestrictionDictionaries(PdfDocument pdf)
     {
         CertificationPermission? certificationPermission = GetCertificationPermission();
 
         if (IsDocumentChangeForbidden(certificationPermission))
+            return (false, "DocMDP dictionary does not permit a new signature.");
+
+        Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> sigDictionaries = SignatureExtractor.ExtractSigDictionaries(pdf);
+
+        // Check FieldMDP restrictions.
+        foreach (PdfSignatureDictionary signatureDictionary in sigDictionaries.Keys)
         {
-            return (false, "DocMDP dictionary does not permit a new signature creation!");
+            SigFieldPermissions? fieldMdp = signatureDictionary.GetFieldMDP();
+
+            if (fieldMdp is not null && IsSignatureFieldCreationForbidden(fieldMdp, _signatureFieldId))
+                return (false, "FieldMDP dictionary does not permit the requested signature.");
         }
 
-        try
+        // Check /Lock dictionaries on previously signed fields.
+        foreach (List<PdfSignatureField> signatureFields in sigDictionaries.Values)
         {
-            Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> sigDictionaries = SignatureExtractor.ExtractSigDictionaries(_pdfReaderWrapper);
-
-            // FieldMDP
-            foreach (PdfSignatureDictionary signatureDictionary in sigDictionaries.Keys)
+            foreach (PdfSignatureField signatureField in signatureFields)
             {
-                SigFieldPermissions? fieldMDP = signatureDictionary.GetFieldMDP();
+                SigFieldPermissions? lockDict = signatureField.GetLockDictionary();
 
-                if (fieldMDP != null && IsSignatureFieldCreationForbidden(fieldMDP, _signatureFieldId))
-                {
-                    return (false, "FieldMDP dictionary does not permit a new signature creation!");
-                }
+                if (lockDict is null)
+                    continue;
+
+                if (IsSignatureFieldCreationForbidden(lockDict, _signatureFieldId))
+                    return (false, "Signature field /Lock dictionary does not permit the requested signature.");
             }
-
-            // Lock dictionary
-            foreach (List<PdfSignatureField> signatureFieldList in sigDictionaries.Values)
-            {
-                foreach (PdfSignatureField signatureField in signatureFieldList)
-                {
-                    SigFieldPermissions? lockDict = signatureField.GetLockDictionary();
-
-                    if (lockDict != null && lockDict.CertificationPermission != null &&
-                        IsSignatureFieldCreationForbidden(lockDict, _signatureFieldId))
-                    {
-                        return (false, "Lock dictionary does not permit a new signature creation!");
-                    }
-                }
-            }
-        }
-        catch (IOException e)
-        {
-            return (false, $"An error occurred while reading signature dictionary entries : {e}");
         }
 
         return (true, "");
@@ -126,13 +153,7 @@ internal class PdfSignabilityChecker
                 return true;
 
             case PdfLockAction.INCLUDE:
-                if (string.IsNullOrWhiteSpace(signatureFieldId))
-                    return false;
-
-                if (sigFieldPermissions.Fields is null)
-                    return false;
-
-                if (sigFieldPermissions.Fields.Contains(signatureFieldId))
+                if (!string.IsNullOrWhiteSpace(signatureFieldId) && sigFieldPermissions.Fields.Contains(signatureFieldId))
                     return true;
 
                 break;
@@ -141,24 +162,20 @@ internal class PdfSignabilityChecker
                 if (string.IsNullOrWhiteSpace(signatureFieldId))
                     return true;
 
-                if (sigFieldPermissions.Fields is null)
-                    return true;
-
                 if (!sigFieldPermissions.Fields.Contains(signatureFieldId))
                     return true;
+
                 break;
 
             default:
-                throw new NotSupportedException(
-                    $"The action value '{sigFieldPermissions.Action}' is not supported!");
+                throw new NotSupportedException($"Unsupported FieldMDP action: {sigFieldPermissions.Action}");
         }
 
-        CertificationPermission? certPerm = GetCertificationPermission();
-
-        return IsDocumentChangeForbidden(certPerm);
+        return IsDocumentChangeForbidden(GetCertificationPermission());
     }
 
-    private static bool IsDocumentChangeForbidden(CertificationPermission? certificationPermission)
+    private static bool IsDocumentChangeForbidden(
+        CertificationPermission? certificationPermission)
     {
         if (certificationPermission is null)
             return false;
@@ -170,73 +187,36 @@ internal class PdfSignabilityChecker
     {
         int certificationLevel = GetCertificationLevel();
 
-        if (certificationLevel > 0)
-        {
-            return Helpers.GetCertificationPermissionByNumber(certificationLevel);
-        }
+        if (certificationLevel <= 0)
+            return null;
 
-        return null;
+        return Helpers.GetCertificationPermissionByNumber(certificationLevel);
     }
 
     public int GetCertificationLevel()
     {
-        if (_pdfReaderWrapper.PermsDictionary is null)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        if (_pdfReaderWrapper.DocMdpDictionary is null)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        if (_pdfReaderWrapper.ReferenceArray is null || _pdfReaderWrapper.ReferenceArray.Size() == 0)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        if (_pdfReaderWrapper.ReferenceDictionary is null)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        if (_pdfReaderWrapper.TransformParamsDictionary is null)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        PdfNumber? p = _pdfReaderWrapper.P;
-
-        if (p is null)
-        {
-            return (int)PdfSignatureAppearance.NOT_CERTIFIED;
-        }
-
-        return p.IntValue();
+        return _pdfReaderWrapper.CertificationLevel;
     }
 
     private bool CanFillSignatureForm()
     {
-        if (!_pdfReaderWrapper.IsOpenedWithFullPermission)
-        {
-            int permissions = _pdfReaderWrapper.Permissions;
+        if (_pdfReaderWrapper.IsOpenedWithFullPermission)
+            return true;
 
-            return IsAllowModifyAnnotations(permissions) || IsAllowFillIn(permissions);
-        }
+        int permissions = _pdfReaderWrapper.Permissions;
 
-        return true;
+        return IsAllowModifyAnnotations(permissions) || IsAllowFillIn(permissions);
     }
 
     private bool CanCreateSignatureField()
     {
-        if (!_pdfReaderWrapper.IsOpenedWithFullPermission)
-        {
-            int permissions = _pdfReaderWrapper.Permissions;
+        if (_pdfReaderWrapper.IsOpenedWithFullPermission)
+            return true;
 
-            return IsAllowModifyContents(permissions) && IsAllowModifyAnnotations(permissions);
-        }
+        int permissions = _pdfReaderWrapper.Permissions;
 
-        return true;
+        return IsAllowModifyContents(permissions)
+            && IsAllowModifyAnnotations(permissions);
     }
 
     private static bool IsAllowModifyContents(int permissions)
@@ -249,13 +229,13 @@ internal class PdfSignabilityChecker
         return IsPermissionBitPresent(permissions, EncryptionConstants.ALLOW_MODIFY_ANNOTATIONS);
     }
 
-    private static bool IsPermissionBitPresent(int permissions, int permissionBit)
-    {
-        return (permissionBit & permissions) > 0;
-    }
-
     private static bool IsAllowFillIn(int permissions)
     {
         return IsPermissionBitPresent(permissions, EncryptionConstants.ALLOW_FILL_IN);
+    }
+
+    private static bool IsPermissionBitPresent(int permissions, int permissionBit)
+    {
+        return (permissions & permissionBit) == permissionBit;
     }
 }

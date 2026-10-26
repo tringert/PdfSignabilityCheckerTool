@@ -1,5 +1,4 @@
-﻿
-using iText.Kernel.Pdf;
+﻿using iText.Kernel.Pdf;
 
 namespace PdfSignabilityCheckerTool;
 
@@ -9,50 +8,40 @@ internal class PdfSignatureDictionary
 
     public PdfSignatureDictionary(PdfDictionary dictionary)
     {
-        Dictionary = dictionary ??
-            throw new ArgumentNullException(nameof(dictionary));
+        Dictionary = dictionary
+            ?? throw new ArgumentNullException(nameof(dictionary));
     }
 
     public SigFieldPermissions? GetFieldMDP()
     {
-        PdfArray? referenceArray =
-            Dictionary.GetAsArray(PdfName.Reference);
+        PdfArray? referenceArray = Dictionary.GetAsArray(PdfName.Reference);
 
         if (referenceArray is null)
             return null;
 
         for (int i = 0; i < referenceArray.Size(); i++)
         {
-            PdfDictionary? refEntry =
-                referenceArray.GetAsDictionary(i);
+            PdfDictionary? refEntry = referenceArray.GetAsDictionary(i);
 
             if (refEntry is null)
                 continue;
 
-            PdfName? transformMethod =
-                refEntry.GetAsName(PdfName.TransformMethod);
+            PdfName? transformMethod = refEntry.GetAsName(PdfName.TransformMethod);
 
             if (!PdfName.FieldMDP.Equals(transformMethod))
                 continue;
 
-            PdfDictionary? transformParams =
-                refEntry.GetAsDictionary(PdfName.TransformParams);
+            PdfDictionary? transformParams = refEntry.GetAsDictionary(PdfName.TransformParams)
+                ?? throw new InvalidDataException("FieldMDP reference is missing /TransformParams.");
+            PdfName? action = transformParams.GetAsName(PdfName.Action)
+                ?? throw new InvalidDataException("FieldMDP transform is missing /Action.");
+            PdfArray? fields = transformParams.GetAsArray(PdfName.Fields);
 
-            if (transformParams is null)
-                continue;
-
-            PdfName? action =
-                transformParams.GetAsName(PdfName.Action);
-
-            if (action is null)
+            if ((PdfName.Include.Equals(action) || PdfName.Exclude.Equals(action))
+                && fields is null)
             {
-                Console.Error.WriteLine(
-                    "FieldMDP transform is missing the /Action entry.");
-                continue;
+                throw new InvalidDataException($"FieldMDP action {action} requires a /Fields array.");
             }
-
-            PdfArray? fields =
-                transformParams.GetAsArray(PdfName.Fields);
 
             return new SigFieldPermissions(action, fields);
         }

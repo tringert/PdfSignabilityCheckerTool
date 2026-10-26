@@ -1,5 +1,4 @@
-﻿
-using iText.Kernel.Pdf;
+﻿using iText.Kernel.Pdf;
 using PdfSignabilityCheckerTool.Enums;
 
 namespace PdfSignabilityCheckerTool;
@@ -46,9 +45,7 @@ internal class SigFieldPermissions
             PdfString? fieldName = fieldsArray.GetAsString(i);
 
             if (fieldName is not null)
-            {
                 Fields.Add(fieldName.ToUnicodeString());
-            }
         }
     }
 }

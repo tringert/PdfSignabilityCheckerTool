@@ -1,5 +1,4 @@
-﻿
-using iText.Forms;
+﻿using iText.Forms;
 using iText.Forms.Fields;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Annot;
@@ -9,84 +8,92 @@ namespace PdfSignabilityCheckerTool;
 
 internal static class SignatureExtractor
 {
-    public static Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> ExtractSigDictionaries(PdfReaderWrapper pdfReaderWrapper)
+    public static Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> ExtractSigDictionaries(PdfDocument pdf)
     {
         Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> signatures = [];
         Dictionary<int, PdfSignatureDictionary> objectMap = [];
-
-        PdfDocument pdf = new(pdfReaderWrapper.GetPdfReader());
 
         PdfAcroForm? acroForm = PdfAcroForm.GetAcroForm(pdf, false);
 
         if (acroForm is null)
             return signatures;
 
-        SignatureUtil sigUtil = new(pdf);
+        SignatureUtil signatureUtil = new(pdf);
+        IDictionary<string, PdfFormField> fields = acroForm.GetAllFormFields();
 
-        IList<string> signedFieldNames = sigUtil.GetSignatureNames();
-
-        IDictionary<string, PdfFormField> acroFields =
-            acroForm.GetAllFormFields();
-
-        foreach (string name in signedFieldNames)
+        foreach (string name in signatureUtil.GetSignatureNames())
         {
-            if (!acroFields.TryGetValue(name, out PdfFormField? acroField))
-            {
-                Console.Error.WriteLine(
-                    $"Signature field '{name}' not found in AcroForm.");
+            bool cantGetSignature = !TryGetSignature(signatureUtil, fields, name,
+                    out PdfDictionary? dictionary,
+                    out IList<PdfWidgetAnnotation>? widgets);
+
+            if (cantGetSignature)
                 continue;
-            }
 
-            PdfDictionary? dictionary = sigUtil.GetSignatureDictionary(name);
+            PdfSignatureDictionary signature = GetOrCreateSignature(dictionary!, signatures, objectMap);
+            List<PdfSignatureField> signatureFields = signatures[signature];
 
-            if (dictionary is null)
+            foreach (PdfWidgetAnnotation widget in widgets!)
             {
-                Console.Error.WriteLine(
-                    $"Signature dictionary not found for field '{name}'.");
-                continue;
-            }
-
-            IList<PdfWidgetAnnotation> widgets = acroField.GetWidgets();
-
-            if (widgets.Count == 0)
-            {
-                Console.Error.WriteLine(
-                    $"No widget found for signature field '{name}'.");
-                continue;
-            }
-
-            PdfIndirectReference? reference =
-                dictionary.GetIndirectReference();
-
-            PdfSignatureDictionary? signature = null;
-
-            if (reference is not null)
-            {
-                objectMap.TryGetValue(
-                    reference.GetObjNumber(),
-                    out signature);
-            }
-
-            if (signature is null)
-            {
-                signature = new PdfSignatureDictionary(dictionary);
-                signatures[signature] = [];
-
-                if (reference is not null)
-                {
-                    objectMap[reference.GetObjNumber()] = signature;
-                }
-            }
-
-            foreach (PdfWidgetAnnotation widget in widgets)
-            {
-                PdfSignatureField pdfSignatureField =
-                    new(widget.GetPdfObject());
-
-                signatures[signature].Add(pdfSignatureField);
+                signatureFields.Add(new PdfSignatureField(widget.GetPdfObject()));
             }
         }
 
         return signatures;
+    }
+
+    private static bool TryGetSignature(
+        SignatureUtil signatureUtil,
+        IDictionary<string, PdfFormField> fields,
+        string name,
+        out PdfDictionary? dictionary,
+        out IList<PdfWidgetAnnotation>? widgets)
+    {
+        dictionary = null;
+        widgets = null;
+
+        if (!fields.TryGetValue(name, out PdfFormField? field))
+        {
+            Console.Error.WriteLine($"Signature field '{name}' not found in AcroForm.");
+            return false;
+        }
+
+        dictionary = signatureUtil.GetSignatureDictionary(name);
+
+        if (dictionary is null)
+        {
+            Console.Error.WriteLine($"Signature dictionary not found for field '{name}'.");
+            return false;
+        }
+
+        widgets = field.GetWidgets();
+
+        if (widgets.Count == 0)
+        {
+            Console.Error.WriteLine($"No widget found for signature field '{name}'.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static PdfSignatureDictionary GetOrCreateSignature(
+        PdfDictionary dictionary,
+        Dictionary<PdfSignatureDictionary, List<PdfSignatureField>> signatures,
+        Dictionary<int, PdfSignatureDictionary> objectMap)
+    {
+        PdfIndirectReference? reference = dictionary.GetIndirectReference();
+        bool hasDictionary = objectMap.TryGetValue(reference.GetObjNumber(), out PdfSignatureDictionary? existing);
+
+        if (reference is not null && hasDictionary)
+            return existing!;
+
+        PdfSignatureDictionary signature = new(dictionary);
+        signatures.Add(signature, []);
+
+        if (reference is not null)
+            objectMap.Add(reference.GetObjNumber(), signature);
+
+        return signature;
     }
 }
