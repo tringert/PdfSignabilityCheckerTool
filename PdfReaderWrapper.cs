@@ -4,52 +4,64 @@ namespace PdfSignabilityCheckerTool;
 
 internal class PdfReaderWrapper
 {
-    private readonly MemoryStream _ms;
-
-    internal bool IsOpenedWithFullPermission { get; init; }
-
-    internal int Permissions { get; init; }
-
-    internal bool IsEncrypted { get; init; }
-
-    internal PdfDictionary? Trailer { get; init; }
-
-    internal PdfDictionary? PermsDictionary { get; set; }
-
-    internal PdfDictionary? DocMdpDictionary { get; set; }
-
-    internal PdfArray? ReferenceArray { get; set; }
-
-    internal PdfDictionary? ReferenceDictionary { get; set; }
-
-    internal PdfDictionary? TransformParamsDictionary { get; set; }
-
-    internal PdfNumber? P { get; set; }
+    private readonly byte[] _pdfBytes;
+    internal bool IsOpenedWithFullPermission { get; }
+    internal int Permissions { get; }
+    internal bool IsEncrypted { get; }
+    internal int CertificationLevel { get; }
 
     public PdfReaderWrapper(MemoryStream ms)
     {
-        _ms = ms;
-        using PdfReader reader = new(ms);
-        using PdfDocument pdf = new(reader);
+        _pdfBytes = ms.ToArray();
+
+        using PdfDocument pdf = OpenDocument();
+        PdfReader reader = pdf.GetReader();
 
         IsOpenedWithFullPermission = reader.IsOpenedWithFullPermission();
         Permissions = reader.GetPermissions();
         IsEncrypted = reader.IsEncrypted();
-        Trailer = pdf.GetTrailer();
 
-        PdfDictionary? rootCatalog = Trailer.GetAsDictionary(PdfName.Root);
+        PdfDictionary catalog = pdf.GetCatalog().GetPdfObject();
+        PdfDictionary? perms = catalog.GetAsDictionary(PdfName.Perms);
+        PdfDictionary? docMdp = perms?.GetAsDictionary(PdfName.DocMDP);
 
-        PermsDictionary = rootCatalog?.GetAsDictionary(PdfName.Perms);
-        DocMdpDictionary = PermsDictionary?.GetAsDictionary(PdfName.DocMDP);
-        ReferenceArray = DocMdpDictionary?.GetAsArray(PdfName.Reference);
-        ReferenceDictionary = ReferenceArray?.GetAsDictionary(0);
-        TransformParamsDictionary = ReferenceDictionary?.GetAsDictionary(PdfName.TransformParams);
-        P = TransformParamsDictionary?.GetAsNumber(PdfName.P);
+        CertificationLevel = 0;
+
+        PdfArray? references = docMdp?.GetAsArray(PdfName.Reference);
+
+        if (references is null)
+            return;
+
+        for (int i = 0; i < references.Size(); i++)
+        {
+            PdfDictionary? reference = references.GetAsDictionary(i);
+
+            if (reference is null)
+                continue;
+
+            PdfName? method = reference.GetAsName(PdfName.TransformMethod);
+
+            if (!PdfName.DocMDP.Equals(method))
+                continue;
+
+            PdfDictionary? parameters = reference.GetAsDictionary(PdfName.TransformParams);
+            PdfNumber? permission = parameters?.GetAsNumber(PdfName.P);
+
+            // PDF DocMDP permission levels:
+            // 1 = No changes
+            // 2 = Form filling and signatures
+            // 3 = Level 2 plus annotation changes
+            CertificationLevel = permission?.IntValue() ?? 2;
+
+            break;
+        }
     }
 
-    internal PdfReader GetPdfReader()
+    internal PdfDocument OpenDocument()
     {
-        _ms.Position = 0;
-        return new PdfReader(_ms);
+        MemoryStream stream = new(_pdfBytes, writable: false);
+        PdfReader reader = new(stream);
+
+        return new PdfDocument(reader);
     }
 }

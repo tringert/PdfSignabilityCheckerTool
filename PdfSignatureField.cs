@@ -3,54 +3,58 @@ using PdfSignabilityCheckerTool.Enums;
 
 namespace PdfSignabilityCheckerTool;
 
-internal class PdfSignatureField(PdfDictionary dict)
+internal class PdfSignatureField
 {
-    public PdfDictionary FieldDict { get; } = dict;
+    public PdfDictionary FieldDict { get; }
+
+    public PdfSignatureField(PdfDictionary dict)
+    {
+        FieldDict = dict ??
+            throw new ArgumentNullException(nameof(dict));
+    }
 
     public SigFieldPermissions? GetLockDictionary()
     {
-        PdfDictionary lockDict = FieldDict.GetAsDictionary(PdfName.Lock);
+        PdfDictionary? lockDict = FieldDict.GetAsDictionary(PdfName.Lock);
 
-        if (lockDict != null)
-            return ExtractPermissionsDictionary(lockDict);
+        if (lockDict is null)
+            return null;
 
-        return null;
+        return ExtractPermissionsDictionary(lockDict);
     }
 
     public static SigFieldPermissions ExtractPermissionsDictionary(PdfDictionary dict)
     {
-        SigFieldPermissions sigPerm = new();
+        ArgumentNullException.ThrowIfNull(dict);
 
-        // Action
-        string action = dict.GetAsName(PdfName.Action).GetValue();
-        sigPerm.Action = GetPdfLockActionFromName(action);
+        PdfName? actionName = dict.GetAsName(PdfName.Action)
+            ?? throw new InvalidDataException("Signature field /Lock dictionary is missing /Action.");
+        PdfLockAction action = GetPdfLockActionFromName(actionName.GetValue());
+        PdfArray? fieldsArray = dict.GetAsArray(PdfName.Fields);
 
-        // Fields
-        List<string> fields = [];
-        PdfArray fieldsArray = dict.GetAsArray(PdfName.Fields);
-
-        if (fieldsArray != null)
+        if ((action == PdfLockAction.INCLUDE || action == PdfLockAction.EXCLUDE)
+            && fieldsArray is null)
         {
-            for (int i = 0; i < fieldsArray.Size(); i++)
-            {
-                string? fieldName = fieldsArray.GetAsString(i)?.ToString();
-
-                if (fieldName != null)
-                    fields.Add(fieldName);
-            }
+            throw new InvalidDataException($"Signature field /Lock action {action} requires a /Fields array.");
         }
 
-        sigPerm.Fields = fields;
+        SigFieldPermissions sigPerm = new(actionName, fieldsArray);
 
-        // Certification permissions
-        PdfName typeName = dict.GetAsName(PdfName.Type);
+        PdfName? typeName = dict.GetAsName(PdfName.Type);
 
-        if (typeName == PdfName.SigFieldLock)
+        if (typeName is not null && !PdfName.SigFieldLock.Equals(typeName))
+            throw new InvalidDataException($"Unexpected signature lock dictionary type: {typeName}");
+
+        PdfNumber? permissionNumber = dict.GetAsNumber(PdfName.P);
+
+        if (permissionNumber is not null)
         {
-            int? num = dict.GetAsInt(PdfName.P);
+            int level = permissionNumber.IntValue();
 
-            if (num != null)
-                sigPerm.CertificationPermission = Helpers.GetCertificationPermissionByNumber(num.Value);
+            if (level is < 1 or > 3)
+                throw new InvalidDataException($"Invalid signature lock certification permission: {level}");
+
+            sigPerm.CertificationPermission = Helpers.GetCertificationPermissionByNumber(level);
         }
 
         return sigPerm;
@@ -64,7 +68,8 @@ internal class PdfSignatureField(PdfDictionary dict)
             "Include" => PdfLockAction.INCLUDE,
             "Exclude" => PdfLockAction.EXCLUDE,
             null or "" => throw new ArgumentNullException(nameof(name)),
-            _ => throw new NotSupportedException($"Unknown action name: {name}")
+            _ => throw new NotSupportedException(
+                $"Unknown signature lock action: {name}")
         };
     }
 }

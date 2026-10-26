@@ -1,71 +1,47 @@
 ﻿using iText.Kernel.Pdf;
-using PdfSignabilityCheckerTool.Enums;
 
 namespace PdfSignabilityCheckerTool;
 
-internal class SigFieldPermissions
+internal class PdfSignatureDictionary
 {
-    public PdfLockAction Action { get; set; }
-    public List<string>? Fields { get; set; }
-    public CertificationPermission? CertificationPermission { get; set; }
+    public PdfDictionary Dictionary { get; }
 
-    public SigFieldPermissions() { }
-
-    public SigFieldPermissions(PdfName actionName, PdfArray fieldsArray)
+    public PdfSignatureDictionary(PdfDictionary dictionary)
     {
-        if (PdfName.All.Equals(actionName))
-            Action = PdfLockAction.ALL;
-        else if (PdfName.Include.Equals(actionName))
-            Action = PdfLockAction.INCLUDE;
-        else if (PdfName.Exclude.Equals(actionName))
-            Action = PdfLockAction.EXCLUDE;
-        else
-            throw new NotSupportedException($"Unknown FieldMDP action: {actionName}");
-
-        Fields = [];
-
-        if (fieldsArray != null)
-        {
-            for (int i = 0; i < fieldsArray.Size(); i++)
-            {
-                PdfString s = fieldsArray.GetAsString(i);
-                if (s != null)
-                    Fields.Add(s.ToString());
-            }
-        }
+        Dictionary = dictionary
+            ?? throw new ArgumentNullException(nameof(dictionary));
     }
-}
-
-internal class PdfSignatureDictionary(PdfDictionary dict)
-{
-    public PdfDictionary Dictionary { get; } = dict;
 
     public SigFieldPermissions? GetFieldMDP()
     {
-        PdfArray referenceArray = Dictionary.GetAsArray(PdfName.Reference);
+        PdfArray? referenceArray = Dictionary.GetAsArray(PdfName.Reference);
 
         if (referenceArray is null)
             return null;
 
         for (int i = 0; i < referenceArray.Size(); i++)
         {
-            PdfDictionary refEntry = referenceArray.GetAsDictionary(i);
+            PdfDictionary? refEntry = referenceArray.GetAsDictionary(i);
 
             if (refEntry is null)
                 continue;
 
-            PdfName transformMethod = refEntry.GetAsName(PdfName.TransformMethod);
+            PdfName? transformMethod = refEntry.GetAsName(PdfName.TransformMethod);
 
-            if (transformMethod != PdfName.FieldMDP)
+            if (!PdfName.FieldMDP.Equals(transformMethod))
                 continue;
 
-            PdfDictionary transformParams = refEntry.GetAsDictionary(PdfName.TransformParams);
+            PdfDictionary? transformParams = refEntry.GetAsDictionary(PdfName.TransformParams)
+                ?? throw new InvalidDataException("FieldMDP reference is missing /TransformParams.");
+            PdfName? action = transformParams.GetAsName(PdfName.Action)
+                ?? throw new InvalidDataException("FieldMDP transform is missing /Action.");
+            PdfArray? fields = transformParams.GetAsArray(PdfName.Fields);
 
-            if (transformParams is null)
-                continue;
-
-            PdfName action = transformParams.GetAsName(PdfName.Action);
-            PdfArray fields = transformParams.GetAsArray(PdfName.Fields);
+            if ((PdfName.Include.Equals(action) || PdfName.Exclude.Equals(action))
+                && fields is null)
+            {
+                throw new InvalidDataException($"FieldMDP action {action} requires a /Fields array.");
+            }
 
             return new SigFieldPermissions(action, fields);
         }
