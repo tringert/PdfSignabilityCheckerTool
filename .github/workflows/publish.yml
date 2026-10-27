@@ -1,3 +1,4 @@
+
 name: Publish Binary
 
 on:
@@ -11,17 +12,21 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+
     env:
       DOTNET_NOLOGO: true
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '9.0.308'
+          dotnet-version: '10.0.x'
+
+      - name: Show .NET version
+        run: dotnet --info
 
       - name: Restore dependencies
         run: dotnet restore
@@ -29,29 +34,37 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      - name: 📦 Publish (single-file, framework-dependent)
+      - name: Publish binary
+        shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
-          $project = Get-ChildItem -Path . -Filter *.csproj -Recurse | Select-Object -First 1
-          dotnet publish $project.FullName -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -p:Version=$version -p:PublishTrimmed=false -o ./output
+          $project = Get-ChildItem -Path . -Filter *.csproj -Recurse |
+            Select-Object -First 1
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1.1.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          if (-not $project) {
+            throw "No .csproj file found"
+          }
 
-      - name: Upload binary to Assets
-        uses: actions/upload-release-asset@v1
+          dotnet publish $project.FullName `
+            -c Release `
+            -r win-x64 `
+            -p:PublishSingleFile=true `
+            --self-contained false `
+            -p:Version=$version `
+            -p:PublishTrimmed=false `
+            -o ./output
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed"
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./output/PdfSignabilityCheckerTool.exe
-          asset_name: PdfSignabilityCheckerTool.exe
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "./output/PdfSignabilityCheckerTool.exe" `
+            --title "Release ${{ github.ref_name }}" `
+            --generate-notes `
+            --verify-tag
